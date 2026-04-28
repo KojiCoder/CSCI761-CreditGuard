@@ -3,12 +3,12 @@ import numpy as np
 from math import radians
 from sklearn.preprocessing import StandardScaler
 
-important_cols = ['cc_num', 'category', 'amt', 'lat', 'long', 'city_pop', 'dob', 'unix_time', 'merch_lat', 'merch_long', 'trans_date_trans_time']
-store_fraud_status = ['is_fraud']
+important_cols = ['cc_num', 'category', 'amt', 'lat', 'long', 'city_pop', 'dob', 'unix_time', 'merch_lat', 'merch_long', 'trans_date_trans_time', 'is_fraud']
+# store_fraud_status = ['is_fraud']
 
-#generate a separate csv that stores whether or not a transaction is frauduent
-fraud_data = pd.read_csv('dataset/fraudTrainOriginal.csv', usecols=store_fraud_status)
-fraud_data.to_csv('dataset/fraudTrainFraudRecord.csv', index=False)
+# #generate a separate csv that stores whether or not a transaction is frauduent
+# fraud_data = pd.read_csv('dataset/fraudTrainOriginal.csv', usecols=store_fraud_status)
+# fraud_data.to_csv('dataset/fraudTrainFraudRecord.csv', index=False)
 
 #preprocessing the data
 pp_data = pd.read_csv('dataset/fraudTrainOriginal.csv', usecols=important_cols)
@@ -44,6 +44,26 @@ scale_cols = ['amt', 'city_pop', 'unix_time', 'age', 'dist_to_merch', 'hour', 'd
 scaler = StandardScaler()
 pp_data[scale_cols] = scaler.fit_transform(pp_data[scale_cols])
 
+#data that only has normal transactions used to train the autoencoder
+pp_normal_trans = pp_data[pp_data['is_fraud'] == 0].drop(columns=['is_fraud'])
 
-pp_data.to_csv('dataset/fraudTrainFiltered.csv', index=False)
+pp_data.to_csv('dataset/fraudTrain.csv', index=False)
+pp_normal_trans.to_csv('dataset/normalTrain.csv', index=False)
+
+#build sequences for LSTM
+seq_len = 10
+data_sorted_unixtime = pp_data.sort_values('unix_time')
+sequences = []
+labels = []
+
+for card_id, group, in data_sorted_unixtime.groupby('cc_num'):
+    #drops cc_num and is_fraud columns before feeding to the LSTM
+    features = group.drop(columns=['cc_num', 'is_fraud']).values
+    target = group['is_fraud'].values
+    for i in range(len(features) - seq_len):
+        sequences.append(features[i:i+seq_len])
+        labels.append(target[i+seq_len])
+
+x_seq = np.array(sequences)
+y_seq = np.array(labels)
 
